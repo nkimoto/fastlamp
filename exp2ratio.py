@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Copyright (c) 2013, LAMP development team
@@ -33,7 +33,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 __author__ = "Aika TERADA"
 
-import sys, os, math
+import sys
+import os
+import math
 from optparse import OptionParser
 
 EGF_COLS = range(3,30) # column numbers of the EGF-induced condition. 
@@ -46,10 +48,10 @@ NAME_COLUMN = 0 # gene name column number
 SEPARATOR = ',' # file separator
 
 def log2( value ):
-	if value == 1:
-		return 0
-	else:
-		return math.log( value, 2 )
+    if value == 1:
+        return 0
+    else:
+        return math.log( value, 2 )
 
 ##
 # Read expression file
@@ -63,22 +65,21 @@ def log2( value ):
 #    tuple[2]: Float value of target expression
 ##
 def readExpFile( exp_file, control_column, target_column, obj_cols ):
-	exp_list = []
-	try:
-		f = open( exp_file, 'r' )
-		line = None
-		for line in f:
-			s = line[:-1].split(SEPARATOR)
-			log_values = list( map(lambda x: log2(float(x)), s[1:])) # log2 expression values
-			# If the gene expresses lower than the given threshold, then continue.
-			if len([x for x in obj_cols if log_values[x-1] > MIN_THRESHOLD]) == 0:
-				continue
-			exp_list.append( tuple( [s[NAME_COLUMN], log_values[ control_column - 1 ], log_values[target_column - 1]] ) )
-		f.close()
-		return exp_list
-	except IOError as e:
-		sys.stderr.write("Error in read %s\n" % exp_file)
-		sys.exit()
+    exp_list = []
+    try:
+        with open( exp_file, 'r', encoding='utf-8' ) as f:
+            for line in f:
+                s = line[:-1].split(SEPARATOR)
+                log_values = [log2(float(x)) for x in s[1:]] # log2 expression values
+                # If the gene expresses lower than the given threshold, then continue.
+                if len([x for x in obj_cols if log_values[x-1] > MIN_THRESHOLD]) == 0:
+                    continue
+                exp_list.append( tuple( [s[NAME_COLUMN], log_values[ control_column - 1 ], log_values[target_column - 1]] ) )
+        return exp_list
+    except IOError as e:
+        message = "Error in read %s\n" % exp_file
+        sys.stderr.write(message)
+        raise e
 
 ##
 # Derive target-expression/mean(control-expression)
@@ -91,80 +92,86 @@ def readExpFile( exp_file, control_column, target_column, obj_cols ):
 #    tuple[1]: ratio
 ##
 def changeRatio( exp_list ):
-	ratio_list = []
-	for t in exp_list:
-		ratio = t[2] - t[1]
-		ratio_list.append(tuple([t[0], ratio]))
-	return ratio_list
+    ratio_list = []
+    for t in exp_list:
+        ratio = t[2] - t[1]
+        ratio_list.append(tuple([t[0], ratio]))
+    return ratio_list
 
 def mergeID( ratio_list ):
-	merge_list = []
-	output_set = set()
-	for t in ratio_list:
-		if not t[0] in output_set:
-			merge_list.append( t )
-			output_set.add( t[0] )
-	return merge_list
+    merge_list = []
+    output_set = set()
+    for t in ratio_list:
+        if t[0] not in output_set:
+            merge_list.append( t )
+            output_set.add( t[0] )
+    return merge_list
 
 def output( ratio_list, output_file ):
-	try:
-		f = open( output_file, 'w' )
-		for t in ratio_list:
-			f.write("%s%s%f\n" % (t[0], SEPARATOR, t[1]))
-		f.close()
-	except IOError as e:
-		sys.stderr.write("Error during output the result to %s" % output_file)
-		sys.exit()
+    try:
+        with open( output_file, 'w', encoding='utf-8' ) as f:
+            for t in ratio_list:
+                f.write("%s%s%f\n" % (t[0], SEPARATOR, t[1]))
+    except IOError as e:
+        message = "Error during output the result to %s" % output_file
+        sys.stderr.write(message)
+        raise e
 
 ##
-# return columun numbers for the control column and the experimented condition
+# Get column number of baseline and objective class
 # target_column: Integer of the analyzed condition
 ##
 def getColumnNumbers( target_column ):
-	base_col = -1; obj_cols = None;
-	if target_column in EGF_COLS: # if control is EGS
-		base_col = 1
-		obj_cols = EGF_COLS
-	else: # if control is HRG
-		base_col = 2
-		obj_cols = HRG_COLS
-	return base_col, obj_cols
+    base_col = -1
+    obj_cols = None
+    if target_column in EGF_COLS: # if control is EGS
+        base_col = 1
+        obj_cols = EGF_COLS[ target_column ]
+    else: # if control is HRG
+        base_col = 2
+        obj_cols = HRG_COLS
+    return base_col, obj_cols
 
 def run( exp_file, output_file, target_column ):
-	control_column, obj_cols = getColumnNumbers( target_column ) # get columun numbers for the control column and the experimented condition
-	exp_list = readExpFile( exp_file, control_column, target_column, obj_cols )
-	ratio_list = changeRatio( exp_list )
-	ratio_list = mergeID( ratio_list ) # reduce the duplicate gene names
-	output( ratio_list, output_file )
-	sys.stdout.write("%s genes are included.\n" % len(ratio_list))
+    control_column, obj_cols = getColumnNumbers( target_column ) # get columun numbers for the control column and the experimented condition
+    exp_list = readExpFile( exp_file, control_column, target_column, obj_cols )
+    ratio_list = changeRatio( exp_list )
+    ratio_list = mergeID( ratio_list ) # reduce the duplicate gene names
+    output( ratio_list, output_file )
+    print("%s genes are included." % len(ratio_list))
 
 if __name__ == "__main__":
-	usage = "usage: %prog expression-file output-file"
-	p = OptionParser(usage = usage)
-	# Option to set control column
-	p.add_option('-t', '--target', dest = "target_column",
-				 help = "Analyzed expression column number.")
-		
-	opts, args = p.parse_args()
-	
-	# check arguments
-	if len(args) < 2:
-		sys.stderr.write("Error: input expression-file and output-file\n")
-		sys.exit()
-		
-	# Convert target column number to integer.
-	target_column = None
-	try:
-		target_column = int(opts.target_column)
-	except TypeError:
-		sys.stderr.write("Error: select column number using -t option.\n")
-		sys.exit()
-	except ValueError:
-		sys.stderr.write("Error: select column number must be integer.\n")
-	
-	# Check the file exist.
-	if not os.path.isfile(args[0]):
-		sys.stderr.write("IOError: No such file: \'" + args[0] + "\'\n")
-		sys.exit()
-		
-	run( args[0], args[1], target_column )
+    usage = "usage: %prog expression-file output-file"
+    p = OptionParser(usage = usage)
+    # Option to set control column
+    p.add_option('-t', '--target', dest = "target_column",
+                 help = "Analyzed expression column number.")
+        
+    opts, args = p.parse_args()
+    
+    # check arguments
+    if len(args) < 2:
+        sys.stderr.write("Error: input expression-file and output-file\n")
+        sys.exit(1)
+        
+    # Convert target column number to integer.
+    target_column = None
+    if opts.target_column is None:
+        sys.stderr.write("Error: select column number using -t option.\n")
+        sys.exit(1)
+    try:
+        target_column = int(opts.target_column)
+    except (ValueError, TypeError):
+        sys.stderr.write("Error: select column number must be integer.\n")
+        sys.exit(1)
+    
+    # Check the file exist.
+    if not os.path.isfile(args[0]):
+        sys.stderr.write("IOError: No such file: \'" + args[0] + "\'\n")
+        sys.exit(1)
+        
+    try:
+        run( args[0], args[1], target_column )
+    except (IOError, ValueError) as e:
+        sys.stderr.write("Error: %s\n" % e)
+        sys.exit(1)

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Copyright (c) 2013, LAMP development team
@@ -45,65 +45,65 @@ import sys
 #        If Mann-Whitney's u-test, the value takes any value.
 ##
 class Transaction:
-	def __init__(self, name):
-		self.id = None # ID for the code. The integer value from 0.
-		self.name = name # gene name
-		self.itemset = set() # item set
-		self.value = None
-	
-	##
-	# This function is used for sort transaction list in u_test
-	##
+    def __init__(self, name):
+        self.id = None # ID for the code. The integer value from 0.
+        self.name = name # gene name
+        self.itemset = set() # item set
+        self.value = None
+    
+    ##
+    # This function is used for sort transaction list in u_test
+    ##
         # __cmp__ is depricated from Py3x
         # instead of it, rich comparison method (such as __lt__) is implemented
-# 	def __cmp__( self, other ):
-# #		print str(self.value) + " " + str(other.value)
-# #		print cmp(self.value, other.value)
-# 		return cmp(self.value, other.value)
-	def __eq__( self, other ):
- 		return ( self.value == other.value )
-	def __ne__( self, other ):
- 		return not (self.value == other.value)
-	def __lt__( self, other ):
- 		return ( self.value < other.value )
-	def __le__( self, other ):
- 		return ( self.value <= other.value )
-	def __gt__( self, other ):
- 		return ( self.value > other.value )
-	def __ge__( self, other ):
- 		return ( self.value >= other.value )
+#     def __cmp__( self, other ):
+# #        print str(self.value) + " " + str(other.value)
+# #        print cmp(self.value, other.value)
+#         return cmp(self.value, other.value)
+    def __eq__( self, other ):
+         return ( self.value == other.value )
+    def __ne__( self, other ):
+         return not (self.value == other.value)
+    def __lt__( self, other ):
+         return ( self.value < other.value )
+    def __le__( self, other ):
+         return ( self.value <= other.value )
+    def __gt__( self, other ):
+         return ( self.value > other.value )
+    def __ge__( self, other ):
+         return ( self.value >= other.value )
 
-	def setID( self, id ):
-		self.id = id
+    def setID( self, id ):
+        self.id = id
 
-	def getID( self ):
-		return self.id
+    def getID( self ):
+        return self.id
 
-	##
-	# Add item to this instance
-	# item: add item ID
-	##
-	def addItem( self, item ):
-		self.itemset.add(item)
+    ##
+    # Add item to this instance
+    # item: add item ID
+    ##
+    def addItem( self, item ):
+        self.itemset.add(item)
 
-	##
-	# Set value
-	# value: a value 
-	##
-	def setValue( self, value ):
-		self.value = value
-	
-	##
-	# Return a copy of this transaction
-	##
-	def copy( self ):
-		t = Transaction( self.name )
-		t.id = self.id
-		t.itemset = self.itemset
-		t.value = self.value
-		return t
+    ##
+    # Set value
+    # value: a value 
+    ##
+    def setValue( self, value ):
+        self.value = value
+    
+    ##
+    # Return a copy of this transaction
+    ##
+    def copy( self ):
+        t = Transaction( self.name )
+        t.id = self.id
+        t.itemset = self.itemset
+        t.value = self.value
+        return t
 
-	def output( self ):
-		sys.stderr.write("%s %s " % (self.id, self.name))
-		sys.stderr.write("%s" % self.itemset)
-		sys.stderr.write(" %s\n" % self.value)
+    def output( self ):
+        print("%s %s " % (self.id, self.name), end="", file=sys.stderr)
+        print("%s" % self.itemset, end="", file=sys.stderr)
+        print(" %s" % self.value, file=sys.stderr)

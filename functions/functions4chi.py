@@ -34,13 +34,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #     Implement computation of the 'less' and 'two-sided' Chi-square test. 
 
 from __future__ import division
-import sys, os
+import sys
+import os
 from . import functionsSuper as fs
 from . import pvalTable
 
 pardir = os.path.dirname(os.path.dirname(os.path.abspath( __file__ )))
 sys.path.append(pardir)
-import readFile
 
 ##
 # Define class
@@ -64,9 +64,10 @@ class FunctionOfX(fs.FunctionsSuper):
 		# Because fisher's exact test does not handle numerical value.
 		for t in transaction_list:
 			if not (t.value == 1.0 or t.value == 0.0):
-				sys.stderr.write("Error: \"" + t.name + "\" value is " + str(t.value)+".\n")
-				sys.stderr.write("       But value is 1 or 0 if you test by fisher's exact test.\n")
-				sys.exit()
+				message = "Error: \"" + t.name + "\" value is " + str(t.value)+".\n" + \
+									"       But value is 1 or 0 if you test by fisher's exact test.\n"
+				sys.stderr.write(message)
+				raise ValueError(message)
 				
 	
 	def getN1(self):
@@ -111,7 +112,6 @@ class FunctionOfX(fs.FunctionsSuper):
 	##
 	def calPValue(self, transaction_list, flag_transactions_id):
 		ovalues = self.contingencyTable( transaction_list, flag_transactions_id, self.__t_size, self.__f_size )
-		total_col1 = self.__f_size
 		total_row1 = sum( ovalues[0] )
 		p = self.__pvalTable.getValue( total_row1, ovalues[0][0] )
 		chi = self.__chiTable.getValue( total_row1, ovalues[0][0] )
@@ -135,7 +135,9 @@ class FunctionOfX(fs.FunctionsSuper):
 		total_col2 = total - total_col1 # the number of all flag 0 transactio (n0)
 		total_row1 = ovalues[0][0] + ovalues[0][1]
 		total_row2 = ovalues[1][0] + ovalues[1][1]
-		means = []; means.append([0]*2); means.append([0]*2)
+		means = []
+		means.append([0]*2)
+		means.append([0]*2)
 		means[0][0] = float(total_row1 * total_col1) / total
 		means[0][1] = float(total_row1 * total_col2) / total
 		means[1][0] = float(total_row2 * total_col1) / total
@@ -161,9 +163,9 @@ class FunctionOfX(fs.FunctionsSuper):
 					break
 		
 		chi = 0
-		for i in xrange(0, len(ovalues)):
+		for i in range(0, len(ovalues)):
 			row = ovalues[i]
-			for j in xrange(0, len(row)):
+			for j in range(0, len(row)):
 				chi = chi + (abs(row[j] - means[i][j]) - yate_corr)**2/means[i][j]
 		return self.__chi2pval( chi ), chi
 
@@ -181,12 +183,12 @@ def maxLambda(transaction_list):
 		for item in t.itemset:
 #			print item
 			# If item does not exist in item_size, then make mapping to 0
-			if not item_sizes.has_key(item):
+			if item not in item_sizes:
 				item_sizes[item] = 0
 			item_sizes[item] = item_sizes[item] + 1
 	# Get max value in item_sizes
 	max_value = 0
-	for i in item_sizes.itervalues():
+	for i in item_sizes.values():
 		if i > max_value:
 			max_value = i
 	return max_value
@@ -211,7 +213,7 @@ def run(xls_file, value_file, itemset_str_lst, delimiter, alternative):
 		itemset.add(item_id + 1)
 		
 	flag_transactions_id = []
-	for i in xrange( len(transaction_list) ):
+	for i in range( len(transaction_list) ):
 		t = transaction_list[i]
 		if len( itemset & t.itemset ) == len(itemset):
 			flag_transactions_id.append( i )

@@ -30,7 +30,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # Define functions which is used the each test method (fisher, t_test, u_test and so on.).
 # Definition about Errors and combinations.
 # @author Terada 10, Nov., 2011
-import sys, math
+import sys
+import math
 
 class TestMethodError(Exception):
 	def __init__(self, e):

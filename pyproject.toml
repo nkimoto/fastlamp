@@ -1,0 +1,19 @@
+[project]
+name = "fastlamp"
+version = "0.1.0"
+description = "A tool for frequent pattern mining in gene expression data."
+authors = [
+    { name = "nkimoto", email = "kimoppy126@gmail.com" },
+]
+license = { text = "BSD-3-Clause" }
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.urls]
+"Original Repository" = "https://github.com/a-terada/lamp"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.0",
+]

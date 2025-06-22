@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Copyright (c) 2013, LAMP development team
@@ -28,67 +28,57 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 import math
+from contextlib import contextmanager
 
 __author__ = "Takayuki ITOH"
 
 
-# open the SVG file
-def openFile(filename):
-    svgfile = open(filename, 'w')
-    
-    svgfile.write("<!DOCTYPE html>\n")
-    #svgfile.write("<html>\n")
-    #svgfile.write(" <body>\n")
-    svgfile.write("  <svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n")
-
-    return svgfile
-
-
-# close the SVG file
-def closeFile(svgfile):
-    svgfile.write("  </svg>\n")
-    #svgfile.write(" </body>\n")
-    #svgfile.write("</html>\n")
-    svgfile.close()
+@contextmanager
+def open_svg(filename):
+    """A context manager for creating and writing to an SVG file."""
+    with open(filename, 'w', encoding='utf-8') as svgfile:
+        svgfile.write("<!DOCTYPE html>\\n")
+        svgfile.write('  <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">\\n')
+        yield svgfile
+        svgfile.write("  </svg>\\n")
 
 
 # draw a loof for a motif
 def drawMotif(sizex, sizey, shiftx, shifty, rot, colorval, svgfile):
     deg = rot * 180.0 / math.pi
-    if(colorval < 0.0):
+    if colorval < 0.0:
         opacity = 0.5 + (colorval + 1.0) * 0.2
-        if(opacity < 0.1):
+        if opacity < 0.1:
             opacity = 0.1
-        if(opacity > 1.0):
+        if opacity > 1.0:
             opacity = 1.0
         b = -colorval * 50.0
-        if(b > 192):
+        if b > 192:
             b = 192
-        if(b < 0):
+        if b < 0:
             b = 0
-        svgfile.write("    <ellipse stroke=\"#888\" fill=\"rgb(255,255," + str(int(b)) + ")\" fill-opacity=\"" + str(opacity) + "\" cx=\"" + str(shiftx) + "\" cy=\"" + str(shifty) + "\" rx=\"" + str(sizex) + "\" ry=\"" + str(sizey) + "\" transform=\"rotate(" + str(deg) + "," + str(shiftx) + "," + str(shifty) + ")\" />\n")
+        svgfile.write(f'    <ellipse stroke="#888" fill="rgb(255,255,{int(b)})" fill-opacity="{opacity}" cx="{shiftx}" cy="{shifty}" rx="{sizex}" ry="{sizey}" transform="rotate({deg},{shiftx},{shifty})" />\\n')
     else:
         g = int(colorval * 128)
-        if(g < 0):
+        if g < 0:
             g = 0
-        if(g > 128):
+        if g > 128:
             g = 128
         opacity = (1.25 - colorval) / 0.8
-        if(opacity < 0.4):
+        if opacity < 0.4:
             opacity = 0.4
-        if(opacity > 1.0):
+        if opacity > 1.0:
             opacity = 1.0
-        svgfile.write("    <ellipse stroke=\"#888\" fill=\"rgb(255," + str(g) + ",0)\" fill-opacity=\"" + str(opacity) + "\" cx=\"" + str(shiftx) + "\" cy=\"" + str(shifty) + "\" rx=\"" + str(sizex) + "\" ry=\"" + str(sizey) + "\" transform=\"rotate(" + str(deg) + "," + str(shiftx) + "," + str(shifty) + ")\" />\n")
+        svgfile.write(f'    <ellipse stroke="#888" fill="rgb(255,{g},0)" fill-opacity="{opacity}" cx="{shiftx}" cy="{shifty}" rx="{sizex}" ry="{sizey}" transform="rotate({deg},{shiftx},{shifty})" />\\n')
 
 #annotate a motif
 def annotateMotif(name, pvalue, x, y, svgfile):
     LINEHEIGHT = 13
-    if(pvalue > 1.0):
+    if pvalue > 1.0:
         vword = '>1'
     else:
-        vword = str.format('{0:.3g}', pvalue) 
-#        vword = str.format('{0:.3e}', pvalue) 
-    buf = "    <text x=\"" + str(x) + "\" y=\"" + str(y) + "\">" + name + "</text>\n"
+        vword = f'{pvalue:.3g}'
+    buf = f'    <text x="{x}" y="{y}">{name}</text>\\n'
     svgfile.write(buf)
-    buf = "    <text x=\"" + str(x) + "\" y=\"" + str(y + LINEHEIGHT) + "\">" + vword + "</text>\n"
+    buf = f'    <text x="{x}" y="{y + LINEHEIGHT}">{vword}</text>\\n'
     svgfile.write(buf)

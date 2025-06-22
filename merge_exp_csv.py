@@ -1,7 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-"""
-Copyright (c) 2013, LAMP development team
+"""Copyright (c) 2013, LAMP development team
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -31,8 +30,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # and make new expression-file and association-file which are consisted from same gene ID.
 # The gene IDs are based on the input expression-file.
 
-import sys, os
-from optparse import OptionParser
+import os
+import sys
+import argparse
 
 __author__ = "Aika TERADA"
 
@@ -44,81 +44,79 @@ SEPARATOR_CSV = ","
 # exp_file: The expression filename ( inputted filename )
 ##
 def readEXPFile( exp_file ):
-	gene_list = []
-	try:
-		f = open( exp_file, 'r' ); line = ""
-		for line in f:
-			if line.startswith("#"):
-				continue
-			s = line[:-1].split(SEPARATOR_EXP)
-			gene_list.append(s[0] )
-		f.close()
-		return gene_list
-	except IOError as e:
-		sys.stderr.write( "Error in read expression-file.\n" )
-		sys.exit()
+    gene_list = []
+    try:
+        with open( exp_file, 'r', encoding='utf-8' ) as f:
+            for line in f:
+                if line.startswith("#"):
+                    continue
+                s = line.strip().split(SEPARATOR_EXP)
+                gene_list.append(s[0] )
+        return gene_list
+    except OSError as e:
+        sys.stderr.write( "Error in read expression-file.\n" )
+        raise e
 
 def readCSVFile( csv_file ):
-	association_dict = {}
-	try:
-		f = open( csv_file, 'r' )
-		line = ""; column_line = "";
-		for line in f:
-			line = line[:-1]
-			if line.startswith("#"):
-				column_line = line
-				continue
-			gene = line.split( SEPARATOR_CSV )[0]
-			association_dict[ gene ] = line
-		f.close()
-		return column_line, association_dict
-	except IOError as e:
-		sys.stderr.write( "Error in read csv-file.\n" )
-		sys.exit()
-		
+    association_dict = {}
+    try:
+        with open( csv_file, 'r', encoding='utf-8' ) as f:
+            column_line = ""
+            for line in f:
+                line = line.strip()
+                if line.startswith("#"):
+                    column_line = line
+                    continue
+                gene = line.split( SEPARATOR_CSV )[0]
+                association_dict[ gene ] = line
+        return column_line, association_dict
+    except OSError as e:
+        sys.stderr.write( "Error in read csv-file.\n" )
+        raise e
+
 ##
 # read CSV file and output a new file when the gene included gene_set
-##		
+##
 def makeCSVFile( out_csv_file, gene_list, association_dict, column_line ):
-	tf_size = len( column_line.split(SEPARATOR_CSV) ) - 1
-	try:
-		fo = open( out_csv_file, 'w' )
-		fo.write("%s\n" % column_line)
-		for gene in gene_list:
-			if gene in association_dict:
-				fo.write("%s\n" % association_dict[gene])
-			else:
-				fo.write("%s" % gene)
-				for i in range(0, tf_size):
-					fo.write(",0")
-				fo.write("\n")
-		fo.close()
-	except IOError as e:
-		sys.stderr.write( "Error in make a new csv file.\n" )
-		sys.exit()
+    tf_size = len( column_line.split(SEPARATOR_CSV) ) - 1
+    try:
+        with open( out_csv_file, "w", encoding='utf-8' ) as fo:
+            fo.write(f"{column_line}\n")
+            for gene in gene_list:
+                if gene in association_dict:
+                    fo.write(f"{association_dict[gene]}\n")
+                else:
+                    fo.write(f"{gene}")
+                    fo.write(",0" * tf_size)
+                    fo.write("\n")
+    except OSError as e:
+        sys.stderr.write( "Error in make a new csv file.\n" )
+        raise e
 
 def run( exp_file, csv_file,  out_csv_file):
-	gene_list = readEXPFile( exp_file )
-	column_line, association_dict = readCSVFile( csv_file )
-	makeCSVFile( out_csv_file, gene_list, association_dict, column_line )
-	sys.stdout.write("# of TFs: %s, # of genes : %s\n" % (len(column_line.split(","))-1, len(association_dict) - 1))
+    gene_list = readEXPFile( exp_file )
+    column_line, association_dict = readCSVFile( csv_file )
+    makeCSVFile( out_csv_file, gene_list, association_dict, column_line )
+    print(f"# of TFs: {len(column_line.split(','))-1}, # of genes : {len(association_dict) - 1}")
 
 if __name__ == "__main__":
-	usage = "usage: %prog expression-file csv-file output-csv-file"
-	p = OptionParser(usage = usage)
-	opts, args = p.parse_args()
+    p = argparse.ArgumentParser(description="Compare gene-ID between expression-file and association-file and make new expression-file and association-file which are consisted from same gene ID.")
+    p.add_argument("expression_file")
+    p.add_argument("csv_file")
+    p.add_argument("output_csv_file")
+    
+    args = p.parse_args()
 
-	# Check argments
-	if (len(args) < 3):
-		sys.stderr.write("Error: input expression-file, csv-file and ontput-csv-file.\n")
-		sys.exit()
-		
-	# Check the file existence.
-	if not os.path.isfile(args[0]):
-		sys.stderr.write("IOError: No such file: \'" + args[0] + "\'\n")
-		sys.exit()
-	if not os.path.isfile(args[1]):
-		sys.stderr.write("IOError: No such file: \'" + args[1] + "\'\n")
-		sys.exit()
+    # Check the file existence.
+    if not os.path.isfile(args.expression_file):
+        sys.stderr.write(f"IOError: No such file: '{args.expression_file}'\n")
+        sys.exit(1)
+    if not os.path.isfile(args.csv_file):
+        sys.stderr.write(f"IOError: No such file: '{args.csv_file}'\n")
+        sys.exit(1)
 
-	run( args[0], args[1], args[2] )
+    try:
+        run( args.expression_file, args.csv_file, args.output_csv_file )
+    except (OSError, IOError) as e:
+        sys.stderr.write(f"Error: {e}\n")
+        sys.exit(1)

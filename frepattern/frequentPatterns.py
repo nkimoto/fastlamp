@@ -41,7 +41,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # @ editor Terada 10, Jan. 2013
 #     
 
-import subprocess, os, time, sys
+import subprocess
+import os
+import sys
 from . import nodeClass
 
 class LCMError(Exception):
@@ -61,7 +63,7 @@ class LCM():
 			self.frequent_list.append( nodeClass.Node() )
 		
 		# set LCM code path
-		if lcm_path == None:
+		if lcm_path is None:
 			current_dir = os.getcwd() # curent directory
 			self.__LCMPATH = current_dir + "/lcm53/lcm"
 			self.__LCMNAME = "lcm"
@@ -148,7 +150,8 @@ class LCM():
 						for i in range(0, len(transactions)):
 							transactions[i] = int(transactions[i])
 					support = len( transactions )
-					node = None; node_index = self.getIndex( support )
+					node = None
+					node_index = self.getIndex( support )
 					if ( node_index < 0 ):
 						node = self.frequent_list[ 0 ]
 					else:
@@ -245,19 +248,21 @@ class LCM():
 			subprocess.check_call( [self.__LCMPATH, "C", "-LAMP", str(n1), "-LAMP_P", str(p_mode), \
 									input_file, str(sig_level)], \
 								   stdout=outlog_lcmlamp, stderr=outlog_lcmlamp )
-			outlog_lcmlamp.close()
 		else:
 			out_file = out_file_pre + ".lcmlamp.aritylim" + str( arity_limit )
 			outlog_lcmlamp = open( out_file, 'w' )
 			subprocess.check_call( [self.__LCMPATH, "F", "-LAMP", str(n1), "-LAMP_P", str(p_mode), \
 									"-u", str(arity_limit), input_file, str(sig_level)], \
 								   stdout=outlog_lcmlamp, stderr=outlog_lcmlamp )
+		if (outlog_lcmlamp):
 			outlog_lcmlamp.close()
 		
-		fr = open( out_file, 'r' ); line = ""; lam = -1
+		fr = open( out_file, 'r' )
+		line = ""
+		lam = -1
 		for line in fr:
 			if line.startswith( "frq= " ):
-				s = line.split( ' ' )
+				s = line.split(" ")
 				lam = int( s[1] )
 		fr.close()
 		lam = lam - 1

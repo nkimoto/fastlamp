@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Copyright (c) 2013, LAMP development team
@@ -57,15 +57,16 @@ class Node():
 		return self.itemset_list[i][1]
 	
 	def output(self):
-		sys.stderr.write("lower_bound: %s, m: %s\n" % (self.bound, self.total ) )
-		for i in xrange( 0, len(self.itemset_list) ):
-			sys.stderr.write("   [%s] (" % i)
-			itemset = self.itemset_list[i][0]; transaction_set = self.itemset_list[i][1]
+		print("lower_bound: %s, m: %s" % (self.bound, self.total), file=sys.stderr)
+		for i in range( 0, len(self.itemset_list) ):
+			print("   [%s] (" % i, end="", file=sys.stderr)
+			itemset = self.itemset_list[i][0]
+			transaction_set = self.itemset_list[i][1]
 			# Print itemset
 			for item in itemset:
-				sys.stderr.write(" %s" % item)
-			sys.stderr.write(" ): ")
+				print(" %s" % item, end="", file=sys.stderr)
+			print(" ): ", end="", file=sys.stderr)
 			# Print transaction_set
 			for t in transaction_set:
-				sys.stderr.write(" %s" % t)
-			sys.stderr.write("\n")
+				print(" %s" % t, end="", file=sys.stderr)
+			print(file=sys.stderr)

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Copyright (c) 2013, LAMP development team
@@ -39,11 +39,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import print_function
 
-import sys, os.path, time, datetime, math
-import transaction
+import sys
+import os.path
+import time
+import datetime
 import readFile
 import frepattern.frequentPatterns as frequentPatterns
-from optparse import OptionParser
+import argparse
 
 import functions.functionsSuper as fs
 import functions.functions4fisher as functions4fisher
@@ -84,9 +86,11 @@ def convertMaxComb( max_comb, item_size ):
 ##
 def reverseValue( transaction_list, set_method ):
 	if set_method in BINARY_METHODS:
-		map( lambda t: t.setValue( 1 - t.value ), transaction_list )
+		for t in transaction_list:
+			t.setValue(1 - t.value)
 	else:
-		map( lambda t: t.setValue( 0 - t.value ), transaction_list )
+		for t in transaction_list:
+			t.setValue(0 - t.value)
 #		map( lambda t: t.setValue( math.fabs( t.value ) ), transaction_list )
 	transaction_list.reverse()
 	return transaction_list
@@ -116,18 +120,19 @@ def calBound( func_f, min_sup, fre_pattern ):
 ##
 def runMultTest(transaction_list, trans4lcm, threshold, set_method, lcm_path, max_comb, outlog, alternative):
 	max_lambda = maxLambda(transaction_list)
-	lam_star = 1; func_f = None;
+	lam_star = 1
+	func_f = None
 	try:
 		if set_method == "fisher":
 			func_f = functions4fisher.FunctionOfX(transaction_list, max_lambda, abs(alternative))
 		elif set_method == "u_test":
 			func_f = functions4u_test.FunctionOfX(transaction_list, alternative)
 		elif set_method == "chi":
-			func_f = functions4chi.FunctionOfX(transaction_list, max_lambda, abs( alternative))
+			func_f = functions4chi.FunctionOfX(transaction_list, max_lambda, abs(alternative))
 		else:
 			sys.stderr.write("Error: choose \"fisher\", \"chi\" or \"u_test\" by using -p option.\n")
 			outlog.close()
-			sys.exit()
+			raise MASLError("Invalid method was selected.")
 		
 		lam = max_lambda
 		
@@ -170,15 +175,15 @@ def runMultTest(transaction_list, trans4lcm, threshold, set_method, lcm_path, ma
 			else:
 				fre_pattern, lam_star = breadthFirst( trans4lcm, fre_pattern, func_f, max_comb, threshold, lam, outlog )
 	except fs.TestMethodError as e:
-		sys.exit()
+		raise e
 	except frequentPatterns.LCMError as e:
-		sys.exit()
+		raise e
 	
 	try:
 		fre_pattern.frequentPatterns( trans4lcm, lam_star, max_comb ) # P_lambda* at line 13
 		k = fre_pattern.getTotal( lam_star )
 	except frequentPatterns.LCMError as e:
-		sys.exit()
+		raise e
 	
 	
 	# multiple test by using k and lambda_star
@@ -208,9 +213,8 @@ def breadthFirst( trans4lcm, fre_pattern, func_f, max_comb, threshold, lam, outl
 		outlog.write("--- lambda: " + str(lam) + " ---\n")
 		# if lambda == 1, all tests which support >= 1 are tested.
 		if lam == 1:
-			lam_star = lam
 			fre_pattern.frequentPatterns( trans4lcm, lam, max_comb ) # line 3 of Algorithm
-			k = fre_pattern.getTotal( lam )
+			fre_pattern.getTotal( lam )
 			break
 	
 		fre_pattern.frequentPatterns( trans4lcm, lam, max_comb ) # line 3 of Algorithm
@@ -220,7 +224,7 @@ def breadthFirst( trans4lcm, fre_pattern, func_f, max_comb, threshold, lam, outl
 		f_lam_1 = calBound( func_f, lam-1, fre_pattern ) # f(lam-1)
 		outlog.write("  f(" + str(lam-1) + ") = " + str(f_lam_1) + "\n")
 		if (f_lam_1 == 0):
-			bottom = sys.maxint
+			bottom = sys.maxsize
 		else:
 			bottom = (threshold//f_lam_1) + 1 # bottom of line 5 of Algorithm
 		f_lam = calBound( func_f, lam, fre_pattern ) # f(lam)
@@ -230,22 +234,20 @@ def breadthFirst( trans4lcm, fre_pattern, func_f, max_comb, threshold, lam, outl
 		if f_lam > f_lam_1:
 			sys.stderr.write("MASLError: f(%s) = %.3g is larger than f(%s) = %.3g\n" \
 							 % (lam, f_lam, lam-1, f_lam_1))
-			sys.exit()
+			raise MASLError("f(lam) > f(lam-1)")
 		if (f_lam == 0):
-			top = sys.maxint
+			top = sys.maxsize
 		else:
 			top = threshold//f_lam # top of line 5 of Algorithm
 		outlog.write("  " + str(bottom) + " <= m_lam:" + str(m_lambda) + " <= " + str(top) + "?\n")
 		if bottom <= m_lambda and m_lambda <= top: # branch on condition of line 5
-			k = m_lambda
 			lam_star = lam
 			break
 		outlog.write("  " + str(m_lambda) + " > " + str(top) + "?\n")
 		if m_lambda > top: # branch on condition of line 8
-			lam_star = lam
 			break
 		lam = lam -1
-	return fre_pattern, lam
+	return fre_pattern, lam_star
 
 ##
 # Find the optimal lambda by depth first algorithm.
@@ -296,17 +298,17 @@ def outputResult( transaction_file, flag_file, threshold, set_method, max_comb, 
 			sys.stdout.write("# of positives in the targets\n")
 		enrich_lst.sort(key=lambda x:x[1])
 		rank = 0
-		for l in enrich_lst:
+		for enrich_item in enrich_lst:
 			rank = rank + 1
-			sys.stdout.write("%d\t%.5g\t%.5g\t" % (rank, l[1], k*l[1]))
+			sys.stdout.write("%d\t%.5g\t%.5g\t" % (rank, enrich_item[1], k*enrich_item[1]))
 			out_column = ""
-			for i in l[0]:
+			for i in enrich_item[0]:
 				out_column = out_column + columnid2name[i-1] + ","
-			sys.stdout.write("%s\t%d\t%d\t" % (out_column[:-1], len(l[0]), l[2]) )
+			sys.stdout.write("%s\t%d\t%d\t" % (out_column[:-1], len(enrich_item[0]), enrich_item[2]) )
 			if set_method == "u_test":
-				sys.stdout.write("%.5g\n" % l[3])
+				sys.stdout.write("%.5g\n" % enrich_item[3])
 			else:
-				sys.stdout.write("%d\n" % l[3])
+				sys.stdout.write("%d\n" % enrich_item[3])
 
 
 # list up the combinations p_i <= alpha/k
@@ -315,8 +317,8 @@ def fwerControl(transaction_list, fre_pattern, lam_star, max_lambda, threshold, 
 	enrich_lst = []
 	i = 0
 	max_itemset_size = 0 # the maximum itemset size in detection of our method. This value is used for Bonferroni correction.
-	for l in reversed( range( lam_star, max_lambda + 1 )):
-		item_trans_list = fre_pattern.getFrequentList( l )
+	for current_lam in reversed( range( lam_star, max_lambda + 1 )):
+		item_trans_list = fre_pattern.getFrequentList( current_lam )
 		for item_set_and_size in item_trans_list:
 			i = i + 1
 			item_set = item_set_and_size[0]
@@ -325,10 +327,10 @@ def fwerControl(transaction_list, fre_pattern, lam_star, max_lambda, threshold, 
 			flag_transaction_list = [] # transaction list which has all items in itemset.
 			for t in item_set_and_size[1]:
 				flag_transaction_list.append( t )
-			p, stat_score = func_f.calPValue(transaction_list, flag_transaction_list)
+			p, stat_val = func_f.calPValue(transaction_list, flag_transaction_list)
 			outlog.write("p: " + str(p) + "\n")
 			if p < (threshold/k):
-				enrich_lst.append([item_set, p, len( item_set_and_size[1] ), stat_score])
+				enrich_lst.append([item_set, p, len( item_set_and_size[1] ), stat_val])
 				item_set_size = len(item_set)
 				if ( item_set_size > max_itemset_size ):
 					max_itemset_size = item_set_size
@@ -347,7 +349,7 @@ def maxLambda(transaction_list):
 			# If item does not exist in item_size, then make mapping to 0
                         # has_key of dict was depricated in py3x, so this is replaced as 'item in item_sizes'
 			#if not item_sizes.has_key(item):
-			if not item in item_sizes:
+			if item not in item_sizes:
 				item_sizes[item] = 0
 			item_sizes[item] = item_sizes[item] + 1
 	
@@ -391,9 +393,9 @@ def run(transaction_file, flag_file, threshold, set_method, lcm_path, max_comb, 
 			transaction_list = reverseValue( transaction_list, set_method )
 		max_comb = convertMaxComb( max_comb, len(columnid2name) )
 	except ValueError as e:
-		return
+		raise e
 	except KeyError as e:
-		return
+		raise e
 	
 	# run multiple test
 	transaction4lcm53 = transaction_file + ".4lcm53"
@@ -414,14 +416,15 @@ def run(transaction_file, flag_file, threshold, set_method, lcm_path, max_comb, 
 								   threshold, func_f, columnid2name, outlog)
 		
 		outlog.close()
-	except IOError as e:
-		outlog.close()
-
+	except (ValueError, IOError, MASLError, fs.TestMethodError) as e:
+		sys.stderr.write("Error: %s\n" % e)
+		raise e
+	
 	sys.stderr.write( "Output results ...\n" )
 	# If the positives and negatives are reversed, the number of positives is calculated. 
 	if ( alternative < 0 ) and ( set_method in BINARY_METHODS ):
-		for l in enrich_lst:
-			l[3] = l[2] - l[3]
+		for enrich_item in enrich_lst:
+			enrich_item[3] = enrich_item[2] - enrich_item[3]
 			
 	# output result
 	outputResult( transaction_file, flag_file, threshold, set_method, max_comb, \
@@ -433,73 +436,51 @@ def run(transaction_file, flag_file, threshold, set_method, lcm_path, max_comb, 
 	return enrich_lst, k, lam_star, columnid2name
 
 if __name__ == "__main__":
-	usage = "usage: %prog [options] transaction_file value_file significance_probability"
-	p = OptionParser(usage = usage, version = "%s" % __version__)
-	p.add_option('-p', '--pvalue', dest = "pvalue_procedure", help = "Choose the p-value calculation procedure from 'fiehser' (Fisher's exact test), 'chi' (Chi-square test) or 'u_test' (Mann-Whitney's U-test)")
+	import argparse
+	parser = argparse.ArgumentParser(description="LAMP: Limitless-Arity Multiple-testing Procedure")
+	parser.add_argument('transaction_file', help="Path to the item-set file.")
+	parser.add_argument('value_file', help="Path to the value file.")
+	parser.add_argument('alpha', type=float, help="The significance level (e.g., 0.05).")
+	parser.add_argument('-p', '--pvalue', dest="pvalue_procedure", default="fisher",
+						choices=['fisher', 'chi', 'u_test'],
+						help="The statistical test to use. (default: fisher)")
+	parser.add_argument('--lcm', dest="lcm_path", default=os.path.dirname(__file__) + "/lcm53/lcm",
+						help="Path to the lcm executable. (default: ./lcm53/lcm)")
+	parser.add_argument('--max_comb', dest="max_comb_size", default="all",
+						help="Maximum size of combination to be tested (default: all).")
+	parser.add_argument('-e', '--log_file', dest="log_filename", default="",
+						help="File name for log output.")
+	parser.add_argument('--alternative', dest="alternative", default="greater",
+						help="Alternative hypothesis. Select from 'greater', 'less', or 'two.sided' (default: greater).",
+						choices=['greater', 'less', 'two.sided'])
 
-	p.add_option('--lcm', dest = "lcm_path", \
-				 default = os.path.dirname(os.path.abspath( __file__ )) + "/lcm53/lcm", \
-				 help = "Set LCM program path if you do not use ./lcm53/lcm")
-
-	p.add_option('--max_comb', dest = "max_comb", default = "all", \
-				 help = "Set the maximum size of combination to be tested.")
+	args = parser.parse_args()
 	
-	p.add_option('-e', dest = "log_filename", default = "", help = "The file name to output log.\n")
-
-	p.add_option('--alternative', dest = "alternative", default = "greater", help = "Indicate which alternative hypothesis is used. Select \"greater\", \"less\" or \"two.sided\"\n, and the default is \"greater\".")
-
-#	p.add_option('-d', dest = "delimiter", default = ",", help = "The delimiter for two input files.\n")
-
-	opts, args = p.parse_args()
-	
-	# check arguments
-	if len(args) != 3:
-		sys.stderr.write("Error: input [target-file], [expression-file] and [significance-level].\n")
-		sys.exit()
-
-	opts.max_comb = opts.max_comb.lower()
-	if not opts.max_comb == "all":
-		if (opts.max_comb.isdigit()):
-			opts.max_comb = int(opts.max_comb)
-		else:
-			sys.stderr.write("Error: max_comb must be an integer value or all.\n")
-			sys.exit()
+	max_comb_size = args.max_comb_size
+	if not max_comb_size == "all":
+		try:
+			max_comb_size = int(max_comb_size)
+		except ValueError:
+			sys.stderr.write("Error: --max_comb must be an integer or 'all'.\n")
+			sys.exit(1)
 		
-	# check the file exist.
-	if not os.path.isfile(args[0]):
-		sys.stderr.write("IOError: No such file: \'" + args[0] + "\'\n")
-		sys.exit()
-	if not os.path.isfile(args[1]):
-		sys.stderr.write("IOError: No such file: \'" + args[1] + "\'\n")
-		sys.exit()
-	try:
-		sig_pro = float(args[2])
-		if (sig_pro < 0) or (sig_pro > 1):
-			raise ValueError
-	except ValueError:
-		sys.stderr.write("Error: significance probability must be a float value from 0.0 to 1.0.\n")
-		sys.exit()
-
 	# check the value of alternative hypothesis
-	if opts.alternative == "greater":
-		opts.alternative = 1
-	elif opts.alternative == "less":
-		opts.alternative = -1
-	elif opts.alternative == "two.sided":
-		opts.alternative = 0
-	else:
-		sys.stderr.write( "Error: \"alternative\" should be one of {\"greater\", \"less\", \"two.sided\"}\n" )
-		sys.exit()
+	if args.alternative == "greater":
+		alternative = 1
+	elif args.alternative == "less":
+		alternative = -1
+	else: # two.sided
+		alternative = 0
 	
 	# change log file
 	d = datetime.datetime.today()
 	log_file = "lamp_log_" + d.strftime("%Y%m%d") + "_" + d.strftime("%H%M%S") + ".txt"
-	if len(opts.log_filename) > 0:
-		log_file = opts.log_filename
+	if len(args.log_filename) > 0:
+		log_file = args.log_filename
 	
-	opts.delimiter = ','
-	
-	transaction_file = args[0]; flag_file = args[1]; threshold = float(args[2])
-	enrich_lst, k, lam_star, columnid2name \
-				= run(transaction_file, flag_file, threshold, opts.pvalue_procedure, \
-					  opts.lcm_path, opts.max_comb, log_file, opts.alternative)
+	try:
+		run(args.transaction_file, args.value_file, args.alpha, args.pvalue_procedure,
+			args.lcm_path, max_comb_size, log_file, alternative)
+	except (ValueError, IOError, MASLError, fs.TestMethodError) as e:
+		sys.stderr.write(f"Error: {e}\\n")
+		sys.exit(1)

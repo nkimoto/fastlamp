@@ -35,26 +35,20 @@ import sys
 
 class PvalTable():
 	def __init__( self, row_size ):
-		self.table = {}
-		"""
-		for row in xrange( 0, row_size + 1 ):
-			row_list = [-1]
-			for col in xrange( 0, row ):
-				row_list.append(-1)
-			self.table.append( row_list )
-		"""
+		self.table = [[-1] * (i + 1) for i in range(row_size)]
 	
 	def getValue( self, row, col ):
-		try:
-			return self.table[row][col]
-		except KeyError:
+		if len(self.table) <= row:
 			return -1
-#		sys.stderr.write("row: %s, col: %s\n" % (row, col))
-#		return self.table[row][col]
+		if len(self.table[row]) <= col:
+			return -1
+		return self.table[row][col]
 
 	def putValue( self, row, col, pval ):
-		if not row in self.table:
-			self.table[row] = {}
+		if len(self.table) <= row:
+			return
+		if len(self.table[row]) <= col:
+			return
 		self.table[row][col] = pval
 
 	def hashSize( self ):
@@ -64,10 +58,10 @@ class PvalTable():
 		return size
 
 	def output( self ):
-		for i in xrange( 0, len(self.table) ):
+		for i in range( 0, len(self.table) ):
 			row = self.table[i]
 			sys.stdout.write("[%s]" % i)
-			for j in xrange( 0, len(row) ):
+			for j in range( 0, len(row) ):
 				sys.stdout.write(" %s:%s" % (j, row[j]))
 			sys.stdout.write("\n")
 	

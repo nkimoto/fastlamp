@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Copyright (c) 2013, LAMP development team
@@ -27,72 +27,57 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import sys, math, optparse
+import sys
+import math
+import argparse
 import flower.flower_svg as svg
-import flower.flower_readfile as readfile
-from flower.flower_readfile import *
-from optparse import OptionParser
+from flower.flower_readfile import readResult, combiName, motifName, motifNgenes, motifApvalue, combiApvalue, combiRank
 
 __author__ = "Takayuki ITOH"
 
 
 # definition of main function
 def main():
-
-    if len(sys.argv) < 2:
-        print('Usage: # python %s resultfilename (target(csv)filename) (value(tab)filename)' % sys.argv[0])
-        quit()
+    # add command line options
+    parser = argparse.ArgumentParser(description="Generate flower-like visualizations from LAMP results.")
+    parser.add_argument("result_filename", help="LAMP result file")
+    parser.add_argument("target_filename", nargs='?', default='', help="Target (csv) filename (optional)")
+    parser.add_argument("value_filename", nargs='?', default='', help="Value (tab) filename (optional)")
+    parser.add_argument("--ewidth", dest="EWIDTH", type=int, default=120)
+    parser.add_argument("--eheight", dest="EHEIGHT", type=int, default=50)
+    parser.add_argument("--minwidth", dest="MINWIDTH", type=int, default=120)
+    parser.add_argument("--minheight", dest="MINHEIGHT", type=int, default=40)
+    parser.add_argument("--shiftx", dest="SHIFTX", type=int, default=400)
+    parser.add_argument("--shifty", dest="SHIFTY", type=int, default=400)
+    parser.add_argument("--petalposcoef", dest="PETALPOSCOEF", type=float, default=0.8)
+    parser.add_argument("--torussizecoef", dest="TORUSSIZECOEF", type=float, default=1.2)
+    args = parser.parse_args()
 
     # default values of sizes of petals
-    EWIDTH = 120
-    EHEIGHT = 50
-    MINWIDTH = 120
-    MINHEIGHT = 40
+    EWIDTH = args.EWIDTH
+    EHEIGHT = args.EHEIGHT
+    MINWIDTH = args.MINWIDTH
+    MINHEIGHT = args.MINHEIGHT
 
     # shift from the origin(=upper-left end)
-    SHIFTX = 400
-    SHIFTY = 400
+    SHIFTX = args.SHIFTX
+    SHIFTY = args.SHIFTY
 
     # coeffcient for the adjustment of petal position
-    PETALPOSCOEF = 0.8
+    PETALPOSCOEF = args.PETALPOSCOEF
 
     # coefficient for the adjustment of torus size
-    TORUSSIZECOEF = 1.2
+    TORUSSIZECOEF = args.TORUSSIZECOEF
 
     # coefficients for size calculation
     sizecoef = 0.3
 
-    # add command line options
-    parser = OptionParser()
-    parser.add_option("--ewidth", "--EWIDTH", dest="EWIDTH", default="120")
-    parser.add_option("--eheight", "--EHEIGHT", dest="EHEIGHT", default="50")
-    parser.add_option("--minwidth", "--MINWIDTH", dest="MINWIDTH", default="120")
-    parser.add_option("--minheight", "--MINHEIGHT", dest="MINHEIGHT", default="40")
-    parser.add_option("--shiftx", "--SHIFTX", dest="SHIFTX", default="400")
-    parser.add_option("--shifty", "--SHIFTY", dest="SHIFTY", default="400")
-    parser.add_option("--petalposcoef", "--PETALPOSCOEF", dest="PETALPOSCOEF", default="0.8")
-    parser.add_option("--torussizecoef", "--TORUSSIZECOEF", dest="TORUSSIZECOEF", default="1.2")
-    (options, args) = parser.parse_args()
-    EWIDTH = int(options.EWIDTH)
-    EHEIGHT = int(options.EHEIGHT)
-    MINWIDTH = int(options.MINWIDTH)
-    MINHEIGHT = int(options.MINHEIGHT)
-    SHIFTX = int(options.SHIFTX)
-    SHIFTY = int(options.SHIFTY)
-    PETALPOSCOEF = float(options.PETALPOSCOEF)
-    TORUSSIZECOEF = float(options.TORUSSIZECOEF)
-
     # read the result file
-    csvfname = ''
-    tabfname = ''
-    if len(sys.argv) > 3:
-        csvfname = sys.argv[2]
-        tabfname = sys.argv[3]
     significance = -1.0
     try:
-        significance = readfile.readResult(sys.argv[1], csvfname, tabfname)
-    except IOError as e:
-        sys.stderr.write( "Error: \"%s\" cannot be found.\n" % sys.argv[1] )
+        significance = readResult(args.result_filename, args.target_filename, args.value_filename)
+    except IOError:
+        print(f'Error: "{args.result_filename}" cannot be found.', file=sys.stderr)
         return
     colorvalMin = -math.log(1.0 / significance)
 
@@ -112,7 +97,7 @@ def main():
             # search for the motif and specify its ID
             nameid = -1
             for i in range(len(motifName)):
-                if(motifName[i].find(nameset[k]) >= 0):
+                if nameset[k] in motifName[i]:
                     nameid = i
                     break
 
@@ -123,13 +108,13 @@ def main():
             sizey = EHEIGHT * sizeval
             shiftx = (math.cos(rad) * (sizex - EHEIGHT * 2)) + SHIFTX
             shifty = (math.sin(rad) * (sizex - EHEIGHT * 2)) + SHIFTY
-            if(xmax < shiftx + sizex):
+            if xmax < shiftx + sizex:
                 xmax = shiftx + sizex
-            if(xmin > shiftx - sizex):
+            if xmin > shiftx - sizex:
                 xmin = shiftx - sizex
-            if(ymax < shifty + sizey):
+            if ymax < shifty + sizey:
                 ymax = shifty + sizey
-            if(ymin > shifty - sizey):
+            if ymin > shifty - sizey:
                 ymin = shifty - sizey
 
         # calculate the scaling factor
@@ -138,62 +123,53 @@ def main():
 
         # open the SVG file
         nameset = combiName[j]
-        svgfilename = sys.argv[1] + '-flower'
-        #for k in range(len(nameset)):
-        #    svgfilename += ('-' + nameset[k])
-        svgfilename += str(combiRank[j])
-        svgfilename += '.svg'
-        svgfile = svg.openFile(svgfilename)
+        svgfilename = f"{args.result_filename}-flower{combiRank[j]}.svg"
+        with svg.open_svg(svgfilename) as svgfile:
+            # for each motif in the combination
+            for k in range(len(nameset)):
+                
+                # search for the motif and specify its ID
+                nameid = -1
+                for i in range(len(motifName)):
+                    if nameset[k] in motifName[i]:
+                        nameid = i
+                        break
 
-        # for each motif in the combination
-        for k in range(len(nameset)):
-            
-            # search for the motif and specify its ID
-            nameid = -1
-            for i in range(len(motifName)):
-                if(motifName[i].find(nameset[k]) >= 0):
-                    nameid = i
-                    break
+                # calculate the size and color of the ellipsoid
+                sizeval = math.log(motifNgenes[nameid]) * sizecoef
+                if motifApvalue[nameid] > significance:
+                    colorval = -math.log(motifApvalue[nameid] / significance)
+                    if colorval < colorvalMin:
+                        colorval = colorvalMin
+                if motifApvalue[nameid] <= significance:
+                    colorval = motifApvalue[nameid] / significance
 
-            # calculate the size and color of the ellipsoid
-            sizeval = math.log(motifNgenes[nameid]) * sizecoef
-            if(motifApvalue[nameid] > significance):
-                colorval = -math.log(motifApvalue[nameid] / significance)
-                if(colorval < colorvalMin):
-                    colorval = colorvalMin
-            if(motifApvalue[nameid] <= significance):
-                colorval = motifApvalue[nameid] / significance
+                # initialize variables before calculating the shape of the ellipsoid
+                rad = k * math.pi * 2 / len(combiName[j]) - math.pi * 0.5
+                sizex = EWIDTH * sizeval * scalex
+                sizey = EHEIGHT * sizeval * scaley
+                if sizex < MINWIDTH:
+                    sizex = MINWIDTH
+                if sizey < MINHEIGHT:
+                    sizey = MINHEIGHT
+                shiftx = (math.cos(rad) * (sizex - EHEIGHT * PETALPOSCOEF)) + SHIFTX
+                shifty = (math.sin(rad) * (sizex - EHEIGHT * PETALPOSCOEF)) + SHIFTY
+                annox = (math.cos(rad) * (sizex * 2  - EHEIGHT * PETALPOSCOEF)) + SHIFTX
+                annoy = (math.sin(rad) * (sizex * 2  - EHEIGHT * PETALPOSCOEF)) + SHIFTY
 
-            # initialize variables before calculating the shape of the ellipsoid
-            rad = k * math.pi * 2 / len(combiName[j]) - math.pi * 0.5
-            sizex = EWIDTH * sizeval * scalex
-            sizey = EHEIGHT * sizeval * scaley
-            if(sizex < MINWIDTH):
-                sizex = MINWIDTH
-            if(sizey < MINHEIGHT):
-                sizey = MINHEIGHT
-            shiftx = (math.cos(rad) * (sizex - EHEIGHT * PETALPOSCOEF)) + SHIFTX
-            shifty = (math.sin(rad) * (sizex - EHEIGHT * PETALPOSCOEF)) + SHIFTY
-            annox = (math.cos(rad) * (sizex * 2  - EHEIGHT * PETALPOSCOEF)) + SHIFTX
-            annoy = (math.sin(rad) * (sizex * 2  - EHEIGHT * PETALPOSCOEF)) + SHIFTY
+                # draw a motif
+                svg.drawMotif(sizex, sizey, shiftx, shifty, rad, colorval, svgfile)
+                svg.annotateMotif(motifName[nameid], motifApvalue[nameid],
+                                  annox, annoy, svgfile)
 
-            # draw a motif
-            svg.drawMotif(sizex, sizey, shiftx, shifty, rad, colorval, svgfile)
-            svg.annotateMotif(motifName[nameid], motifApvalue[nameid],
-                              annox, annoy, svgfile)
+            # draw the combination
+            colorval = combiApvalue[j] / significance
+            size = EHEIGHT * scalex * TORUSSIZECOEF
+            if size < MINHEIGHT:
+                size = MINHEIGHT
+            svg.drawMotif(size, size, SHIFTX, SHIFTY, 0.0, colorval, svgfile)
+            svg.annotateMotif("", combiApvalue[j], SHIFTX-30, SHIFTY-5, svgfile)
 
-        # draw the combination
-        colorval = combiApvalue[j] / significance
-        size = EHEIGHT * scalex * TORUSSIZECOEF
-        if(size < MINHEIGHT):
-            size = MINHEIGHT
-        svg.drawMotif(size, size, SHIFTX, SHIFTY, 0.0, colorval, svgfile)
-        svg.annotateMotif("", combiApvalue[j], SHIFTX-30, SHIFTY-5, svgfile)
-
-        # close the SVG file
-        svg.closeFile(svgfile)
-
-    
 # call the main function
 if __name__ == '__main__':
     main()

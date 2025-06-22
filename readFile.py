@@ -36,127 +36,114 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # @editor aika, 11, Mar. 2014
 #    Change readFiles for keeping transaction ID.
 
-import sys, transaction, csv
+import sys
+import transaction
 
 ##
-# Read transaction and flag file and return transaction matrix.
-# transaction_file: 
+# Read transaction data and value data.
+# This method is simple read.
+# Not have any check for input files.
+# So, you must prepare complete files.
+#
+# Return
+# 1. list of transactions
+# 2. list of mapping from column id to column name
 ##
 def readFiles(transaction_file, value_file, delm):
-	transaction_list, gene2id, columnid2name = readTransactionFile(transaction_file, delm)
+	gene2id = {} # dictionary from gene name to id
+	transaction_list, columnid2name = readItemFile(transaction_file, gene2id, delm)
 	transaction_list = readValueFile(value_file, transaction_list, gene2id, delm)
-	transaction_list.sort() # sort transaction_list according to transaction_value
-	# Generate IDs to transactions
-	for i in range( 0, len(transaction_list) ):
-		t = transaction_list[i]
-		t.id = i
-	# check transaction names two
-	checkTransName(transaction_list, transaction_file) # check transaction names two
+	transaction_list.sort(key=lambda x: x.value)
 	return transaction_list, columnid2name
 
 ##
-# Read transaction file and return list of transactions.
-# item ID is integer value and begin from 0.
+# Read item file.
+# Return
+# 1. list of transactions
+# 2. list of mapping from column id to column name
 ##
-def readTransactionFile(transaction_file, delm):
-	transaction_list = []
-	gene2id = {} # dictionary that gene name -> transaction ID
+def readItemFile(transaction_file, gene2id, delm):
+	transaction_list = [] # list of transactions
 	columnid2name = [] # list about mapping column id to column name
 	gene_set = set([])
-	line_num = 0; col_size = -1
+	line_num = 0
+	col_size = -1
 	try:
-		f = open( transaction_file, 'rU' )
-		for row_list in csv.reader( f, delimiter = delm ):
-			line_num = line_num + 1
-			# If line is header line, read column name
-			if line_num == 1:
-				col_size = len( row_list )
-				for i in range(1, col_size):
-					colname = row_list[i]
-					columnid2name.append(colname)
-				continue
-			
-			t_name = row_list[0]
-			if t_name in gene_set:
-				sys.stderr.write("Error: %s is contained two or more times in %s.\n" \
-								 % (t_name, transaction_file))
-				sys.exit()
-			# check the number of columns
-			if len( row_list ) != col_size:
-				sys.stderr.write("Error in %s\n" % transaction_file)
-				sys.stderr.write("    The header line contains %s columns, while line %s contains %s columns.\n" \
-								 % (col_size, line_num, len( row_list )))
-				sys.exit()
-				
-			gene_set.add(t_name)
-			t = transaction.Transaction(t_name)
-			gene2id[t_name] = len(transaction_list)
-			for i in range(1, len(row_list)):
-				flag = int(row_list[i])
-				if flag == 1:
-					t.addItem(i)
-				elif flag == 0:
+		with open( transaction_file, 'r', encoding='utf-8' ) as f:
+			for line in f:
+				line_num = line_num + 1
+				row_list = [x.strip() for x in line.strip().split(delm)]
+				# If line is header line, read column name
+				if line_num == 1:
+					col_size = len( row_list )
+					for i in range(1, col_size):
+						colname = row_list[i]
+						columnid2name.append(colname)
 					continue
-				else:
-					sys.stderr.write("line %s in \'%s\' contains the value neither 0 or 1.\n" \
-									 % (line_num, transaction_file) )
-					sys.exit()
-			transaction_list.append(t)
+				
+				t_name = row_list[0]
+				if t_name in gene_set:
+					message = "Error: %s is contained two or more times in %s.\\n" % (t_name, transaction_file)
+					sys.stderr.write(message)
+					raise ValueError(message)
+				# check the number of columns
+				if len( row_list ) != col_size:
+					message = "Error in %s\\n" % transaction_file + \
+									 "    The header line contains %s columns, while line %s contains %s columns.\\n" % (col_size, line_num, len( row_list ))
+					sys.stderr.write(message)
+					raise ValueError(message)
+				
+				gene_set.add(t_name)
+				t = transaction.Transaction(t_name)
+				gene2id[t_name] = len(transaction_list)
+				for i in range(1, len(row_list)):
+					flag = int(row_list[i])
+					if flag == 1:
+						t.addItem(i)
+				transaction_list.append(t)
 	except IOError as e:
-		sys.stderr.write("Error: %s\n" % e)
-		sys.exit()
-	return transaction_list, gene2id, columnid2name
-
+		sys.stderr.write("Error: %s is not found.\n" % e.filename)
+		raise e
+	return transaction_list, columnid2name
 
 ##
-# Read flag file and add information about flags to transaction list.
-# value_file: Read flag file.
-#     The column1 is gene name and the column2 is value (for example, gene expression).
-# transaction_list: List of transactions. This is made of readTransactionFile method.
-# gene2id: Dictionary that key indicates gene name and value is transaction ID(location of list)
+# Read value file.
 ##
 def readValueFile(value_file, transaction_list, gene2id, delm):
-	line_num = 0; gene_set = set([])
+	line_num = 0
+	gene_set = set([])
 	try:
-		f = open( value_file, 'rU' )
-		for row_list in csv.reader( f, delimiter = delm ):
-			line_num = line_num + 1
-			if (row_list[0].startswith("#")):
-				continue
+		with open( value_file, 'r', encoding='utf-8' ) as f:
+			for line in f:
+				line_num = line_num + 1
+				if (line.startswith("#")):
+					continue
+				row_list = [x.strip() for x in line.strip().split(delm)]
 
-			# This error raises if value file contains more than two columns.
-			if not len(row_list) == 2:
-				sys.stderr.write("Error: line %s in %s.\n" % (line_num, value_file) )
-				sys.stderr.write("       value-file should contain two columns.\n")
-				sys.exit()
+				# This error raises if value file contains more than two columns.
+				if not len(row_list) == 2:
+					message = "Error: line %s in %s.\\n" % (line_num, value_file) + \
+									 "       value-file should contain two columns.\\n"
+					sys.stderr.write(message)
+					raise ValueError(message)
 
-			genename = row_list[0].strip()
-			exp_value = row_list[1].strip()
+				genename = row_list[0].strip()
+				exp_value = row_list[1].strip()
 
-			# This error raises if value cannot be converted to float.
-			if not isFloat( exp_value ):
-				sys.stderr.write("Error: line %s in %s.\n" % (line_num, value_file))
-				sys.stderr.write("       \'%s\' could not be converted string to float.\n" % exp_value)
-				sys.exit()
-			# This error raises if the identical keys are contained more than two times.
-			if genename in gene_set:
-				sys.stderr.write("Error: %s is contained two or more times in %s.\n" \
-								 % (genename, value_file))
-				sys.exit()
-			# This error raise if gene does not include in itemset file.
-			if not genename in gene2id:
-				sys.stderr.write("Error:line %s in %s.\n" % (line_num, value_file))
-				sys.stderr.write("      \'%s\' is not contained in itemset file.\n" % genename)
-				sys.exit()
-				
-			gene_set.add(genename)
-			exp_value = float( exp_value )
-			geneid = gene2id[genename]
-			t = transaction_list[geneid]
-			t.value = exp_value
+				# This error raises if value cannot be converted to float.
+				try:
+					exp_value = float(exp_value)
+				except ValueError as e:
+					message = "Error: line %s in %s.\\n" % (line_num, value_file) + \
+									 "       %s cannot be converted to float.\\n" % (exp_value)
+					sys.stderr.write(message)
+					raise e
+
+				gene_set.add(genename)
+				transaction_list[ gene2id[genename] ].setValue(exp_value)
 	except IOError as e:
-		sys.stderr.write("Error: %s cannot be found.\n" % value_file)
-		sys.exit()
+		sys.stderr.write("Error: %s cannot be opened.\n" % e.filename)
+		raise e
 	return transaction_list
 
 ##
@@ -165,9 +152,10 @@ def readValueFile(value_file, transaction_list, gene2id, delm):
 ##
 def checkTransName(transaction_list, transaction_file):
 	for t in transaction_list:
-		if t.value == None:
-			sys.stderr.write("\"%s\" only appears in %s\n" % (t.name, transaction_file))
-			sys.exit()
+		if t.value is None:
+			message = "\"%s\" only appears in %s\n" % (t.name, transaction_file)
+			sys.stderr.write(message)
+			raise ValueError(message)
 
 
 ##
