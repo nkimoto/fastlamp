@@ -113,8 +113,9 @@ lamp_log_*.txt
 lamp_test_*.txt
 logs/
 
-# LCM generated files
+# LCM generated files (exclude runtime generated files but keep required sample files)
 *.4lcm53
+!lcm53/sample/*.4lcm53
 *.results.lcm/
 *.results.lcm.*
 lcm53/lcm
