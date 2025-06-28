@@ -41,10 +41,25 @@ from __future__ import division
 import sys
 import math
 import os
+import numpy as np
 from . import functionsSuper as fs
+from numba import njit
 
 pardir = os.path.dirname(os.path.dirname(os.path.abspath( __file__ )))
 sys.path.append(pardir)
+
+# Numba-optimized functions
+@njit(cache=True)
+def _numba_u_value(x_values, y_values):
+    """Numba-optimized U-value calculation using JIT compilation"""
+    u_value = 0.0
+    for i in range(len(x_values)):
+        for j in range(len(y_values)):
+            if x_values[i] > y_values[j]:
+                u_value += 1.0
+            elif x_values[i] == y_values[j]:
+                u_value += 0.5
+    return u_value
 
 ##
 # Define class
@@ -58,8 +73,6 @@ class FunctionOfX(fs.FunctionsSuper):
         self.__transaction_list = transaction_list[:]
         self.alternative = alternative # alternative hypothesis. greater -> 1, less -> -1, two.sided -> 0.
         self.calTime = 0 # Total number of calculate P-value
-#        self.__range20_1 = range(1, 21)
-#        self.__range20_1.reverse() # the integer list from 20 to 1. this is used by standard normal probability
 
     ##
     # Search the group which t.value less than threshold.
@@ -135,31 +148,10 @@ class FunctionOfX(fs.FunctionsSuper):
     # tgroup_x and t_group_y already sorted by transaction value.
     ##
     def __uValue(self, tgroup_x, tgroup_y):
-        u_value = 0.0
-        previous_u_x_min = 0 # The rank of transaction in previous search
-        previous_u_x_max = 0 # The rank of transaction in previous search
-        previous_value = None # The previous expression value
-        left_index = 0 # The start point of searching value.
-        right_index = len(tgroup_y) - 1 # The end point of searching value.
-        for t_x in tgroup_x:
-            # u_x_min: rank sum of transaction which the value < t_x in tgroup_y
-            # u_x_max: rank sum of transaction which the value <= t_x in tgroup_y
-            u_x_min = None
-            # If t_x.value is equal to previous one, u_x_min and u_x_max are also equals.
-            if (t_x.value == previous_value):
-                u_x_min = previous_u_x_min
-                u_x_max = previous_u_x_max
-            # Caluclate u_value because tgroup_x value exists between tgroup_y range
-            else:
-                u_x_min, u_x_max = self.__binarySearch(t_x.value, tgroup_y, left_index, right_index)
-                left_index = u_x_max
-            
-            # Add rank of t_x to u_value
-            u_value = u_value + (u_x_min+u_x_max)/2
-            previous_u_x_min = u_x_min
-            previous_u_x_max = u_x_max
-            previous_value = t_x.value
-        return u_value
+        # Always use Numba-optimized computation
+        x_values = np.array([t.value for t in tgroup_x], dtype=np.float64)
+        y_values = np.array([t.value for t in tgroup_y], dtype=np.float64)
+        return _numba_u_value(x_values, y_values)
     
     ##
     # This function returns mean and variance which is used in U test.
@@ -178,17 +170,16 @@ class FunctionOfX(fs.FunctionsSuper):
     # tgroup_x and t_group_y already sorted by transaction value.
     ##
     def __uTest(self, tgroup_x, tgroup_y):
-        u_value = self.__uValue(tgroup_x, tgroup_y) # u-value of two groups.
-        # z value of u-value
+        # When either group is empty, return p-value 1.
+        if (len(tgroup_x) == 0 or len(tgroup_y) == 0):
+            return 1., 0.
+        u_value = self.__uValue(tgroup_x, tgroup_y)
         mean_u, var_u = self.__calStatValue(tgroup_x, tgroup_y)
-        if var_u == 0:
-            return 1.0, 0
+        if (var_u == 0):
+            return 1., 0.
         z_value = (u_value - mean_u)/math.sqrt(var_u)
-#        sys.stderr.write("u: %s, mean: %s, var: %s, z_value: %s, " % (u_value, mean_u, var_u, z_value))
-        
-        # calculate p-value from z_value
-        # this value approximation of standard normal distribution
-        return self.stdNorDistribution(z_value), z_value
+        p_value = self.stdNorDistribution(z_value)
+        return p_value, z_value
         
     ##
     # divide transaction_list to two groups.
@@ -196,22 +187,13 @@ class FunctionOfX(fs.FunctionsSuper):
     # itemset: itemset. transaction_list is divided which includes this itemset or not.
     ##
     def __divideGroup(self, frequent_itemset):
-        in_t_list = [] # transactions which have itemset.
-        out_t_list = [] # transactions does not have itemset.
-        # If itemset of t contains test itemset, t puts in_t_list.
-        # Else, t puts out_t_list
-        for i in range(0, len(self.__transaction_list)):
-            t = self.__transaction_list[i]
+        in_t_list = []
+        out_t_list = []
+        for i in range(len(self.__transaction_list)):
             if i in frequent_itemset:
-                in_t_list.append(t)
+                in_t_list.append(self.__transaction_list[i])
             else:
-                out_t_list.append(t)
-#        sys.stderr.write("in_t_list: \n")
-#        for t in in_t_list:
-#            sys.stderr.write("%s %s\n" % (t.name, t.value) )
-#        sys.stderr.write("out_t_list: \n")
-#        for t in out_t_list:
-#            sys.stderr.write("%s %s\n" % (t.name, t.value) )
+                out_t_list.append(self.__transaction_list[i])
         return in_t_list, out_t_list
 
     ##
@@ -220,24 +202,15 @@ class FunctionOfX(fs.FunctionsSuper):
     # The z-value that minimum p-value is mean/var
     ##
     def funcF(self, x):
-        # calculate p-value if the group_x is consisted from max x transactions.
         min_t_list = self.__transaction_list[0:x]
         max_t_list = self.__transaction_list[x:]
-#        for t in min_t_list:
-#            print t.name + " ",
-#            print t.itemset,
-#            print " " + str(t.value)
-#        print "---"
-#        for t in max_t_list:
-#            print t.name + " ",
-#            print t.itemset,
-#            print " " + str(t.value)
         mean_u, var_u = self.__calStatValue(min_t_list, max_t_list)
-        min_z = mean_u/math.sqrt(var_u) # minimum z-value limited x.
-#        print "  mean: " + str(mean_u) + " var: " + str(var_u) + " z-value: " + str(min_z)
-        p = self.stdNorDistribution(min_z) # p-value if transaction divided into max x and other.
+        if (var_u == 0):
+            return 1.
+        min_z = mean_u/math.sqrt(var_u)
+        p = self.stdNorDistribution(min_z)
         if (self.alternative == 0):
-            min( p * 2., 1.0 )
+            p = min( p * 2., 1. )
         return p
     
     ##
@@ -246,8 +219,6 @@ class FunctionOfX(fs.FunctionsSuper):
     # frequent_itemset: frequent transactions
     ##    
     def calPValue(self, transaction_list, frequent_itemset):
-#        print "--- calPValue ---"
-#        print frequent_itemset
         in_t_list, out_t_list = self.__divideGroup(frequent_itemset) # dvide transactions to itemset or not.
         p_value, z_value = self.__uTest(in_t_list, out_t_list)
         if (self.alternative == 0):
@@ -312,10 +283,6 @@ def run(xls_file, value_file, itemset_str_lst, delimiter, alternative):
         if len( itemset & t.itemset ) == len(itemset):
             flag_transactions_id.append( i )
     p_value, stat_score = func.calPValue(transaction_list, flag_transactions_id)
-#        print i
-#        print item_id
-#        print columnid2name[item_id]
-#    p, stat_score = func.calPValue(transaction_list, itemset)
     n = len(transaction_list)
     
     sys.stdout.write("p-value: %g (N: %s, x: %s, z-score: %f)\n" \

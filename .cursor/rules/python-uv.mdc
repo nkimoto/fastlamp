@@ -21,6 +21,9 @@ Always use these commands:
 # Add or upgrade dependencies
 uv add <package>
 
+# To add a development dependency, use the --dev flag:
+uv add --dev <package>
+
 # Remove dependencies
 uv remove <package>
 

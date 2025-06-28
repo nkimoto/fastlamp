@@ -36,11 +36,76 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import division
 import sys
 import os
+import numpy as np
 from . import functionsSuper as fs
 from . import pvalTable
+from numba import njit
+import math
 
 pardir = os.path.dirname(os.path.dirname(os.path.abspath( __file__ )))
 sys.path.append(pardir)
+
+# Numba-optimized functions for Chi-square test
+@njit(cache=True)
+def _numba_chi2_pval(chi):
+    """Numba-optimized chi-square p-value calculation for df=1"""
+    if chi == 0.0:
+        return 1.0
+    
+    # For df=1, chi2 CDF = 2 * normal_cdf(sqrt(chi)) - 1
+    # So chi2 survival function = 2 * (1 - normal_cdf(sqrt(chi)))
+    # But we want the upper tail, so we use: 1 - normal_cdf(sqrt(chi))
+    z = math.sqrt(chi)
+    
+    # Standard normal CDF calculation (same as in functionsSuper)
+    pi2 = 0.398942280401432677940
+    is_value = -1
+    y = abs(z)
+    c = y * y
+    p = 0.0
+    z_exp = math.exp(-c * 0.5) * pi2
+    
+    if y < 2.5:
+        for i in range(20, 0, -1):
+            p = i * c / (i * 2 + 1 + is_value * p)
+            is_value = -is_value
+        p = 0.5 - z_exp * y / (1.0 - p)
+    else:
+        for i in range(20, 0, -1):
+            p = i / (y + p)
+        p = z_exp / (y + p)
+    
+    return p
+
+@njit(cache=True)
+def _numba_chi2_statistic(observed, expected):
+    """Numba-optimized chi-square statistic calculation"""
+    chi = 0.0
+    yates_correction = 0.5  # Apply Yates correction for 2x2 tables
+    
+    for i in range(4):  # 2x2 table has 4 cells
+        if expected[i] > 0:
+            diff = abs(observed[i] - expected[i]) - yates_correction
+            if diff < 0:
+                diff = 0
+            chi += (diff * diff) / expected[i]
+    
+    return chi
+
+@njit(cache=True)
+def _numba_calculate_expected(ovalues, total, total_col1):
+    """Numba-optimized expected values calculation"""
+    total_col2 = total - total_col1
+    total_row1 = ovalues[0] + ovalues[1]  # a + b
+    total_row2 = ovalues[2] + ovalues[3]  # c + d
+    
+    expected = np.zeros(4, dtype=np.float64)
+    expected[0] = (total_row1 * total_col1) / total    # E[a]
+    expected[1] = (total_row1 * total_col2) / total    # E[b]  
+    expected[2] = (total_row2 * total_col1) / total    # E[c]
+    expected[3] = (total_row2 * total_col2) / total    # E[d]
+    
+    return expected
 
 ##
 # Define class
@@ -77,9 +142,54 @@ class FunctionOfX(fs.FunctionsSuper):
 		return self.__t_size
 
 	##
+	# Calculate probability of occurrence probability about table.
+	# a: Top left of table
+	# b: Top right of table
+	# n1: Sum of top and bottom left (a + c)
+	# n0: Sum of top and bottom right (b + d)
+	##
+	def __probabilityTable(self, ovalues):
+		# Always use Numba-optimized version
+		# Flatten ovalues for Numba processing
+		observed = np.array([ovalues[0][0], ovalues[0][1], ovalues[1][0], ovalues[1][1]], dtype=np.float64)
+		expected = _numba_calculate_expected(observed, self.__t_size, self.__f_size)
+		
+		# Calculate chi-square statistic
+		chi = _numba_chi2_statistic(observed, expected)
+		
+		# Calculate p-value
+		p_value = _numba_chi2_pval(chi)
+		
+		return p_value, chi
+
+	def __chi2pval(self, chi):
+		"""High-precision chi-square p-value calculation"""
+		if (chi == 0.0):
+			return 1.0
+		else: # dimension = 1
+			return (self.stdNorDistribution(chi**0.5))
+
+	def __calMeans(self, ovalues):
+		"""High-precision means calculation"""
+		total = self.__t_size
+		total_col1 = self.__f_size # the number of all flag 1 transaction (n1)
+		total_col2 = total - total_col1 # the number of all flag 0 transactio (n0)
+		total_row1 = ovalues[0][0] + ovalues[0][1]
+		total_row2 = ovalues[1][0] + ovalues[1][1]
+		means = []
+		means.append([0]*2)
+		means.append([0]*2)
+		means[0][0] = float(total_row1 * total_col1) / total
+		means[0][1] = float(total_row1 * total_col2) / total
+		means[1][0] = float(total_row2 * total_col1) / total
+		means[1][1] = float(total_row2 * total_col2) / total
+		return means
+	
+	##
 	# calclate MASL
 	##
 	def funcF(self, x):
+		"""High-precision MASL calculation for Chi-square test"""
 		p1 = p2 = 1.0
 		chi1 = chi2 = 0.0
 		total_row1 = self.__f_size
@@ -103,7 +213,7 @@ class FunctionOfX(fs.FunctionsSuper):
 			return p1
 		else:
 			return p2
-					
+	
 	##
 	# Calculate p-value by using chi-square test.
 	# transaction_list: List of transactions
@@ -128,52 +238,6 @@ class FunctionOfX(fs.FunctionsSuper):
 			self.__chiTable.putValue( total_row1, ovalues[0][0], chi )
 #		sys.stdout.write( "x: %d, a:%d, chi: %s, p: %s\n" % (total_row1, ovalues[0][0], chi, p) )
 		return p, ovalues[0][0]
-	
-	def __calMeans(self, ovalues):
-		total = self.__t_size
-		total_col1 = self.__f_size # the number of all flag 1 transaction (n1)
-		total_col2 = total - total_col1 # the number of all flag 0 transactio (n0)
-		total_row1 = ovalues[0][0] + ovalues[0][1]
-		total_row2 = ovalues[1][0] + ovalues[1][1]
-		means = []
-		means.append([0]*2)
-		means.append([0]*2)
-		means[0][0] = float(total_row1 * total_col1) / total
-		means[0][1] = float(total_row1 * total_col2) / total
-		means[1][0] = float(total_row2 * total_col1) / total
-		means[1][1] = float(total_row2 * total_col2) / total
-		return means
-	
-	##
-	# Calculate probability of occurrence probability about table.
-	# a: Top left of table
-	# b: Top right of table
-	# n1: Sum of top and bottom left (a + c)
-	# n0: Sum of top and bottom right (b + d)
-	##
-	def __probabilityTable(self, ovalues):
-		means = self.__calMeans(ovalues) # calculate the exception value
-		
-		# Yate continuity correction
-		yate_corr = 0
-		for i in means:
-			for j in i:
-				if j < 5:
-					yate_corr = 0.5
-					break
-		
-		chi = 0
-		for i in range(0, len(ovalues)):
-			row = ovalues[i]
-			for j in range(0, len(row)):
-				chi = chi + (abs(row[j] - means[i][j]) - yate_corr)**2/means[i][j]
-		return self.__chi2pval( chi ), chi
-
-	def __chi2pval(self, chi):
-		if (chi == 0.0):
-			return 1.0
-		else: # dimension = 1
-			return (self.stdNorDistribution(chi**0.5))
 
 def maxLambda(transaction_list):
 	# Count each item size

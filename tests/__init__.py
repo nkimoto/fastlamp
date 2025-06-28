@@ -1,0 +1,3 @@
+"""
+LAMP test package
+"""
